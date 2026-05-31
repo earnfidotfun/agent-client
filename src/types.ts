@@ -2,7 +2,7 @@ import type { Connection, PublicKey, Transaction, VersionedTransaction } from '@
 
 export const EARNFI_DEFAULT_API_BASE = 'https://app.earnfi.fun/api/ai-agent/v1';
 
-/** PayAI facilitator limits per EarnFi skill.md */
+/** x402 exact-SVM facilitator limits per EarnFi skill.md */
 export const X402_COMPUTE_UNIT_LIMIT = 40_000;
 export const X402_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS = 5n;
 

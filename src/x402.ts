@@ -27,9 +27,8 @@ export function getPaymentRequiredHeader(headers: Headers): string | null {
 }
 
 /**
- * PayAI /verify expects exactly three instructions in order: SetComputeUnitLimit, SetComputeUnitPrice,
- * TransferChecked. Do not bundle ATA creation into the payment tx.
- * @see https://docs.payai.network/x402/reference §6.2
+ * x402 facilitators expect exactly three instructions in order: SetComputeUnitLimit,
+ * SetComputeUnitPrice, TransferChecked. Do not bundle ATA creation into the payment tx.
  */
 async function requireExistingAta(connection: Connection, mint: PublicKey, owner: PublicKey, label: string) {
     const ata = getAssociatedTokenAddressSync(mint, owner, true);
@@ -37,7 +36,7 @@ async function requireExistingAta(connection: Connection, mint: PublicKey, owner
     if (!info) {
         throw new Error(
             `Missing ${label} USDC ATA (${ata.toBase58()}). Create or fund it in a separate transaction before paying; ` +
-                'PayAI rejects payment txs that include Associated Token Program create instructions.'
+                'x402 facilitators reject payment txs that include Associated Token Program create instructions.'
         );
     }
     return ata;
@@ -51,7 +50,7 @@ export type SignExactSvmPaymentOptions = {
 };
 
 /**
- * Build a PayAI-compatible exact SVM payment signature for x402 retry headers.
+ * Build an exact SVM payment signature for x402 retry headers (facilitator-compatible).
  */
 export async function signExactSvmPayment(
     requirements: X402Accept,

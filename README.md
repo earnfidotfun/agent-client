@@ -7,7 +7,7 @@ TypeScript library and **`earnfi-agent`** CLI for the **EarnFi Agent API** (`ai-
 - **Polling** — `getJob`, `listSubmissions`, `listCompletions`, `getInterruptStatus`
 - **Creator** — `pauseJob`, verifications, contest winners, job detail/users/payments
 
-x402 payments use PayAI-compatible limits: **≤40,000 CU**, **≤5 microLamports/CU**, then SPL `TransferChecked` (ATAs must exist before paying).
+x402 payments use facilitator-compatible limits: **≤40,000 CU**, **≤5 microLamports/CU**, then SPL `TransferChecked` (ATAs must exist before paying).
 
 ## Install
 
