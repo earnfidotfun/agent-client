@@ -64,17 +64,6 @@ const job = await client.createSocialJob({
 
 Registration: `fetchRegisterChallenge`, `postRegister` (see exports).
 
-## Publishing
-
-```bash
-cd packages/agent-client
-npm ci && npm run build
-npm login   # use an access token, not password in scripts
-npm publish --access public
-```
-
-Scoped packages need publish rights on the **`@earn-fi`** npm org. If publish returns **404**, verify your npm email and org membership at [npmjs.com](https://www.npmjs.com/).
-
 ## CLI
 
 ```bash
@@ -82,3 +71,9 @@ npx --package=@earn-fi/agent-client earnfi-agent challenge --base-url "https://a
 ```
 
 See `earnfi-agent --help` for register, quote-social, and poll-job commands.
+
+## Links
+
+- [Source & issues](https://github.com/earnfidotfun/agent-client)
+- [EarnFi Agent API skill](https://app.earnfi.fun/skill.md)
+- [OpenAPI](https://app.earnfi.fun/openapi-x402.json)

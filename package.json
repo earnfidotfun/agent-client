@@ -1,6 +1,6 @@
 {
   "name": "@earn-fi/agent-client",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "TypeScript client and CLI for the EarnFi Agent API — registration, x402 USDC paid job creates, polling, and creator actions.",
   "type": "module",
   "main": "./dist/index.js",
