@@ -34,14 +34,29 @@ async function main() {
     const accept = x402.paymentRequired?.accepts?.[0];
     ok('x402 accept scheme exact', accept?.scheme === 'exact');
 
+    const quoteClient = new EarnFiAgentClient({
+        baseUrl: BASE,
+        agentToken: 'smoke-test-token-not-real',
+    });
+    const quoteAuth = await quoteClient.quoteSocialJob({
+        taskType: 'like',
+        slots: 1,
+        rewardPerUser: '0.05',
+    });
+    ok(
+        'quoteSocialJob sends auth (not missing_agent_token)',
+        quoteAuth.status !== 401 || (quoteAuth.json && quoteAuth.json.code !== 'missing_agent_token'),
+        `HTTP ${quoteAuth.status}`
+    );
+
     const quote = await client.quoteGet('/jobs/social', {
-        agent_token: 'smoke-test-token',
+        agent_token: 'smoke-invalid-token',
         task_type: 'like',
         slots: '1',
         reward_per_user: '0.05',
         execution_mode: 'human',
     });
-    ok('social quote returns 402 or auth error', quote.status === 402 || quote.status === 401 || quote.status === 403, `HTTP ${quote.status}`);
+    ok('social quote auth (not 401 missing_agent_token)', quote.status === 402 || quote.status === 403, `HTTP ${quote.status}`);
     if (quote.status === 402) {
         ok('social quote has accepts', Boolean(quote.paymentRequired?.accepts?.length));
     }

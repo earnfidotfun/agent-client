@@ -1,4 +1,9 @@
-export { fetchRegisterChallenge, postRegister } from './register.js';
+export {
+    fetchRegisterChallenge,
+    postRegister,
+    postRegisterChallenge,
+    normalizeEd25519Signature,
+} from './register.js';
 export type { RegisterChallengeResponse, RegisterPostBody } from './register.js';
 
 export {
@@ -6,6 +11,8 @@ export {
     EarnFiHttpClient,
     type EarnFiHttpClientConfig,
     type EarnFiWalletLike,
+    type JobCreatedResponse,
+    type RegisterSuccessResponse,
 } from './client.js';
 
 export {
@@ -23,4 +30,20 @@ export {
     type X402Response,
 } from './types.js';
 
+export type { CatalogResponse, EarnFiErrorBody } from './types/api.js';
+
 export { b64decodeJson, b64encodeJson, getPaymentRequiredHeader, signExactSvmPayment } from './x402.js';
+
+export { EarnFiApiError, EarnFiPreflightError } from './errors.js';
+
+export { preflightPayment, assertPreflightPayment, USDC_MINT_MAINNET } from './preflight.js';
+export type { PreflightPaymentResult, PreflightPaymentOptions } from './preflight.js';
+
+export { pollUntil } from './poll.js';
+export type { PollOptions } from './poll.js';
+
+export { clientFromEnv, walletFromEnv } from './env.js';
+export type { FromEnvOptions } from './env.js';
+
+/** Alias: {@link clientFromEnv} */
+export { clientFromEnv as earnFiClientFromEnv } from './env.js';

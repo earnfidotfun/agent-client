@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 /**
- * EarnFi Agent CLI — challenge, register, quote (402 probe), poll.
- * Private keys stay local; never committed.
+ * EarnFi Agent CLI — register, quote, paid create, poll, preflight.
  */
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
-import { fetchRegisterChallenge, postRegister } from './register.js';
+import { Connection, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
+import {
+    EarnFiAgentClient,
+    EARNFI_DEFAULT_API_BASE,
+    fetchRegisterChallenge,
+    postRegister,
+    preflightPayment,
+} from './index.js';
 
 function arg(name: string): string | undefined {
     const i = process.argv.indexOf(name);
@@ -13,42 +19,70 @@ function arg(name: string): string | undefined {
     return process.argv[i + 1];
 }
 
-function hasCmd(name: string) {
-    return process.argv.includes(name);
-}
-
 function usage() {
-    console.log(`earnfi-agent — EarnFi Agent API helper
+    console.log(`earnfi-agent — EarnFi Agent API (@earn-fi/agent-client)
 
 Usage:
-  earnfi-agent challenge --base-url <AGENT_API_V1_URL> --wallet <PUBKEY> --name <AGENT_NAME>
-  earnfi-agent register --base-url <URL> --wallet <PUBKEY> --name <NAME> --secret-key-bs58 <KEY>
-  earnfi-agent quote-social --base-url <URL> --token <AGENT_TOKEN> --task-type like --slots 10 --reward 0.05
-  earnfi-agent poll-job --base-url <URL> --job-id <ID> --secret <SECRET>
+  earnfi-agent catalog [--base-url URL]
+  earnfi-agent challenge --wallet PUBKEY --name AGENT_NAME [--base-url URL]
+  earnfi-agent register --wallet PUBKEY --name NAME --secret-key-bs58 KEY [--base-url URL]
+  earnfi-agent init --wallet PUBKEY --name NAME --secret-key-bs58 KEY [--base-url URL]
+  earnfi-agent preflight --secret-key-bs58 KEY [--rpc URL]
+  earnfi-agent quote-social --token TOKEN --task-type follow --slots 2 --reward 0.03 [--base-url URL]
+  earnfi-agent create-social --token TOKEN --task-type follow --slots 2 --reward 0.03 --secret-key-bs58 KEY [--content-url URL] [--base-url URL]
+  earnfi-agent poll-job --job-id ID --secret SECRET [--base-url URL]
 
 Environment:
-  EARNFI_AGENT_API_BASE   Default base URL (same as --base-url)
-  SOLANA_RPC_URL          Default https://api.mainnet-beta.solana.com
+  EARNFI_AGENT_API_BASE   Agent API v1 base URL
+  EARNFI_AGENT_TOKEN      agent_token from register
+  SOLANA_RPC_URL          Solana RPC (default mainnet-beta)
+  SOLANA_SECRET_KEY_B58   Wallet secret for paid creates
 `);
+}
+
+function baseUrl() {
+    return arg('--base-url') || (process.env.EARNFI_AGENT_API_BASE || '').trim() || EARNFI_DEFAULT_API_BASE;
+}
+
+function rpcUrl() {
+    return arg('--rpc') || (process.env.SOLANA_RPC_URL || '').trim() || 'https://api.mainnet-beta.solana.com';
+}
+
+function walletFromSecret(skB58: string) {
+    const kp = Keypair.fromSecretKey(bs58.decode(skB58.trim()));
+    return {
+        kp,
+        wallet: {
+            publicKey: kp.publicKey,
+            signTransaction: async (tx: Transaction | VersionedTransaction) => {
+                if (tx instanceof Transaction) tx.partialSign(kp);
+                return tx;
+            },
+        },
+    };
 }
 
 async function main() {
     const cmd = process.argv[2];
-    const base =
-        arg('--base-url') ||
-        (process.env.EARNFI_AGENT_API_BASE || '').trim() ||
-        '';
-
     if (!cmd || cmd === '-h' || cmd === '--help') {
         usage();
         process.exit(cmd ? 0 : 1);
     }
 
+    const base = baseUrl();
+
+    if (cmd === 'catalog') {
+        const client = new EarnFiAgentClient({ baseUrl: base });
+        const res = await client.getCatalog();
+        console.log(JSON.stringify(res.json, null, 2));
+        return;
+    }
+
     if (cmd === 'challenge') {
         const wallet = arg('--wallet') || '';
         const name = arg('--name') || '';
-        if (!base || !wallet || !name) {
-            console.error('challenge requires --base-url, --wallet, --name');
+        if (!wallet || !name) {
+            console.error('challenge requires --wallet, --name');
             process.exit(1);
         }
         const ch = await fetchRegisterChallenge(base, wallet, name);
@@ -56,69 +90,118 @@ async function main() {
         return;
     }
 
-    if (cmd === 'register') {
+    if (cmd === 'register' || cmd === 'init') {
         const wallet = arg('--wallet') || '';
         const name = arg('--name') || '';
-        const skB58 = arg('--secret-key-bs58') || '';
-        if (!base || !wallet || !name || !skB58) {
-            console.error('register requires --base-url, --wallet, --name, --secret-key-bs58');
+        const skB58 = arg('--secret-key-bs58') || process.env.SOLANA_SECRET_KEY_B58 || '';
+        if (!wallet || !name || !skB58) {
+            console.error(`${cmd} requires --wallet, --name, --secret-key-bs58 (or SOLANA_SECRET_KEY_B58)`);
             process.exit(1);
         }
-        const full = bs58.decode(skB58.trim());
-        const kp = nacl.sign.keyPair.fromSecretKey(full);
-        const pub = bs58.encode(kp.publicKey);
+        const { kp } = walletFromSecret(skB58);
+        const pub = kp.publicKey.toBase58();
         if (pub !== wallet.trim()) {
-            console.error('Error: --wallet must match the public key derived from --secret-key-bs58');
+            console.error('Error: --wallet must match secret key');
             process.exit(1);
         }
-        const ch = await fetchRegisterChallenge(base, wallet, name);
-        const msgBytes = new TextEncoder().encode(ch.message!);
-        const sig = nacl.sign.detached(msgBytes, kp.secretKey);
-        const signature = Array.from(sig);
-        const res = await postRegister(base, {
-            wallet_address: wallet,
-            agent_name: name,
-            message: ch.message!,
-            signature,
-            nonce: ch.nonce!,
+        const client = new EarnFiAgentClient({
+            baseUrl: base,
+            connection: new Connection(rpcUrl()),
+            wallet: walletFromSecret(skB58).wallet,
         });
-        console.log(JSON.stringify(res, null, 2));
+        const out = await client.register({
+            agentName: name,
+            walletAddress: wallet,
+            signMessage: async (msg) => nacl.sign.detached(new TextEncoder().encode(msg), kp.secretKey),
+        });
+        console.log(JSON.stringify(out, null, 2));
+        if (cmd === 'init') {
+            console.log('\n# Save these environment variables:');
+            console.log(`export EARNFI_AGENT_API_BASE="${base}"`);
+            console.log(`export EARNFI_AGENT_TOKEN="${out.agentToken}"`);
+            console.log(`export SOLANA_RPC_URL="${rpcUrl()}"`);
+            console.log('export SOLANA_SECRET_KEY_B58="..." # keep secret');
+        }
         return;
     }
 
-    if (cmd === 'quote-social') {
-        const token = arg('--token') || '';
-        const taskType = arg('--task-type') || 'like';
-        const slots = parseInt(arg('--slots') || '10', 10);
-        const reward = arg('--reward') || '0.05';
-        if (!base || !token) {
-            console.error('quote-social requires --base-url, --token');
+    if (cmd === 'preflight') {
+        const skB58 = arg('--secret-key-bs58') || process.env.SOLANA_SECRET_KEY_B58 || '';
+        if (!skB58) {
+            console.error('preflight requires --secret-key-bs58 or SOLANA_SECRET_KEY_B58');
             process.exit(1);
         }
-        const u = new URL(base.replace(/\/$/, '') + '/jobs/social');
-        u.searchParams.set('agent_token', token);
-        u.searchParams.set('task_type', taskType);
-        u.searchParams.set('slots', String(slots));
-        u.searchParams.set('reward_per_user', reward);
-        u.searchParams.set('execution_mode', 'human');
-        const r = await fetch(u.toString(), { method: 'GET', headers: { accept: 'application/json' } });
-        const text = await r.text();
-        console.log(`HTTP ${r.status}\n${text}`);
+        const { wallet } = walletFromSecret(skB58);
+        const result = await preflightPayment({
+            wallet,
+            connection: new Connection(rpcUrl()),
+        });
+        console.log(JSON.stringify(result, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2));
+        process.exit(result.ready ? 0 : 1);
+    }
+
+    if (cmd === 'quote-social') {
+        const token = arg('--token') || process.env.EARNFI_AGENT_TOKEN || '';
+        const taskType = arg('--task-type') || 'follow';
+        const slots = parseInt(arg('--slots') || '10', 10);
+        const reward = arg('--reward') || '0.05';
+        const contentUrl = arg('--content-url');
+        if (!token) {
+            console.error('quote-social requires --token or EARNFI_AGENT_TOKEN');
+            process.exit(1);
+        }
+        const client = new EarnFiAgentClient({ baseUrl: base, agentToken: token });
+        const res = await client.quoteSocialJob({
+            taskType,
+            slots,
+            rewardPerUser: reward,
+            contentUrl,
+        });
+        console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
+        if (res.paymentRequired) {
+            console.log('\nPayment required:', JSON.stringify(res.paymentRequired.accepts?.[0], null, 2));
+        }
         return;
+    }
+
+    if (cmd === 'create-social') {
+        const token = arg('--token') || process.env.EARNFI_AGENT_TOKEN || '';
+        const skB58 = arg('--secret-key-bs58') || process.env.SOLANA_SECRET_KEY_B58 || '';
+        const taskType = arg('--task-type') || 'follow';
+        const slots = parseInt(arg('--slots') || '10', 10);
+        const reward = arg('--reward') || '0.05';
+        const contentUrl = arg('--content-url');
+        if (!token || !skB58) {
+            console.error('create-social requires --token (or EARNFI_AGENT_TOKEN) and --secret-key-bs58');
+            process.exit(1);
+        }
+        const { wallet } = walletFromSecret(skB58);
+        const client = new EarnFiAgentClient({
+            baseUrl: base,
+            agentToken: token,
+            wallet,
+            connection: new Connection(rpcUrl()),
+        });
+        const res = await client.createSocialJob({
+            taskType,
+            slots,
+            rewardPerUser: reward,
+            contentUrl,
+        });
+        console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
+        process.exit(res.status === 200 ? 0 : 1);
     }
 
     if (cmd === 'poll-job') {
         const jobId = arg('--job-id') || '';
         const secret = arg('--secret') || '';
-        if (!base || !jobId || !secret) {
-            console.error('poll-job requires --base-url, --job-id, --secret');
+        if (!jobId || !secret) {
+            console.error('poll-job requires --job-id, --secret');
             process.exit(1);
         }
-        const u = new URL(base.replace(/\/$/, '') + '/jobs/' + encodeURIComponent(jobId));
-        u.searchParams.set('secret', secret);
-        const r = await fetch(u.toString(), { method: 'GET', headers: { accept: 'application/json' } });
-        const text = await r.text();
-        console.log(`HTTP ${r.status}\n${text}`);
+        const client = new EarnFiAgentClient({ baseUrl: base });
+        const res = await client.getJob(jobId, { secret });
+        console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
         return;
     }
 

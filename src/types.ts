@@ -54,8 +54,10 @@ export type AgentClientOptions = {
     /** Required for paid x402 creates */
     connection?: Connection;
     fetchImpl?: typeof fetch;
-    /** Send Agent-Token header instead of query param when possible (default true) */
+    /** Send Agent-Token header (default true); set false to use ?agent_token= query instead */
     preferAgentTokenHeader?: boolean;
+    /** Skip USDC balance/ATA preflight before signing payment tx */
+    skipPaymentPreflight?: boolean;
 };
 
 export type TokenGateInput = string | Record<string, unknown>;
