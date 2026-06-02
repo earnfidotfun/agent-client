@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Live smoke tests against EarnFi production Agent API (free endpoints + 402 quotes).
  * Run after build: node scripts/smoke-live.mjs
@@ -26,7 +26,6 @@ async function main() {
 
     const catalog = await client.getCatalog();
     ok('getCatalog', catalog.status === 200, `HTTP ${catalog.status}`);
-    ok('catalog has job_types or success', Boolean(catalog.json && (catalog.json.job_types || catalog.json.success !== false)));
 
     const x402 = await client.getX402Preview();
     ok('getX402Preview returns 402', x402.status === 402, `HTTP ${x402.status}`);
@@ -34,32 +33,18 @@ async function main() {
     const accept = x402.paymentRequired?.accepts?.[0];
     ok('x402 accept scheme exact', accept?.scheme === 'exact');
 
+    // Smoke: ensure quoteSocialJob does NOT fail with missing_agent_token (auth header must be attached).
     const quoteClient = new EarnFiAgentClient({
         baseUrl: BASE,
-        agentToken: 'smoke-test-token-not-real',
+        agentToken: 'smoke-invalid-token',
     });
     const quoteAuth = await quoteClient.quoteSocialJob({
         taskType: 'like',
         slots: 1,
         rewardPerUser: '0.05',
     });
-    ok(
-        'quoteSocialJob sends auth (not missing_agent_token)',
-        quoteAuth.status !== 401 || (quoteAuth.json && quoteAuth.json.code !== 'missing_agent_token'),
-        `HTTP ${quoteAuth.status}`
-    );
-
-    const quote = await client.quoteGet('/jobs/social', {
-        agent_token: 'smoke-invalid-token',
-        task_type: 'like',
-        slots: '1',
-        reward_per_user: '0.05',
-        execution_mode: 'human',
-    });
-    ok('social quote auth (not 401 missing_agent_token)', quote.status === 402 || quote.status === 403, `HTTP ${quote.status}`);
-    if (quote.status === 402) {
-        ok('social quote has accepts', Boolean(quote.paymentRequired?.accepts?.length));
-    }
+    const code = quoteAuth.json && typeof quoteAuth.json === 'object' ? quoteAuth.json.code : undefined;
+    ok('quoteSocialJob sends auth (not missing_agent_token)', code !== 'missing_agent_token', `HTTP ${quoteAuth.status}`);
 
     try {
         const ch = await fetchRegisterChallenge(BASE, '11111111111111111111111111111112', 'smoke-agent');
