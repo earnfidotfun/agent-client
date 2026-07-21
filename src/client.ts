@@ -9,7 +9,14 @@ import type {
     X402Response,
 } from './types.js';
 import { EARNFI_DEFAULT_API_BASE } from './types.js';
-import type { JobCreatedResponse, RegisterSuccessResponse } from './types/api.js';
+import type {
+    HumanActionCreateInput,
+    HumanActionCreateResponse,
+    HumanActionResult,
+    HumanActionType,
+    JobCreatedResponse,
+    RegisterSuccessResponse,
+} from './types/api.js';
 import { b64decodeJson, b64encodeJson, getPaymentRequiredHeader, signExactSvmPayment } from './x402.js';
 import { fetchRegisterChallenge, postRegister } from './register.js';
 import { assertPreflightPayment, preflightPayment as runPreflightPayment } from './preflight.js';
@@ -385,14 +392,22 @@ export class EarnFiAgentClient {
         rewardPerUser: string;
         executionMode?: 'human';
         quick?: boolean;
+        effortBucket?: string;
         contentUrl?: string;
         title?: string;
         tokenGate?: TokenGateInput;
         xAccountRequirement?: 'all' | 'verified_only' | 'verified';
         requiresVerifiedX?: boolean;
+        targetClients?: string[];
+        requireSgtHolder?: boolean;
+        seekerOnly?: boolean;
+        paymentMethod?: 'connected_wallet' | 'creator_wallet';
+        targetingPolicy?: Record<string, unknown>;
+        minRank?: string;
         agentToken?: string;
     }) {
         const token = this.resolveAgentToken(params.agentToken);
+        const seeker = params.requireSgtHolder ?? params.seekerOnly;
         return this.x402Get(
             '/jobs/social',
             paramsToRecord({
@@ -401,11 +416,20 @@ export class EarnFiAgentClient {
                 reward_per_user: params.rewardPerUser,
                 execution_mode: params.executionMode ?? 'human',
                 quick: params.quick ? 'true' : undefined,
+                effort_bucket: params.effortBucket,
                 content_url: params.contentUrl,
                 title: params.title,
                 token_gate: tokenGateParam(params.tokenGate),
                 x_account_requirement: params.xAccountRequirement,
                 requires_verified_x: params.requiresVerifiedX,
+                target_clients: params.targetClients ? JSON.stringify(params.targetClients) : undefined,
+                require_sgt_holder: seeker ? 'true' : undefined,
+                seeker_only: seeker ? 'true' : undefined,
+                payment_method: params.paymentMethod,
+                targeting_policy: params.targetingPolicy
+                    ? JSON.stringify(params.targetingPolicy)
+                    : undefined,
+                min_rank: params.minRank,
             }),
             token
         );
@@ -445,9 +469,18 @@ export class EarnFiAgentClient {
         verificationMethod?: 'manual' | 'auto';
         executionMode?: 'human';
         tokenGate?: TokenGateInput;
+        quick?: boolean;
+        effortBucket?: string;
+        targetClients?: string[];
+        requireSgtHolder?: boolean;
+        seekerOnly?: boolean;
+        paymentMethod?: 'connected_wallet' | 'creator_wallet';
+        targetingPolicy?: Record<string, unknown>;
+        minRank?: string;
         agentToken?: string;
     }) {
         const token = this.resolveAgentToken(params.agentToken);
+        const seeker = params.requireSgtHolder ?? params.seekerOnly;
         return this.x402Get(
             '/jobs/manual',
             paramsToRecord({
@@ -458,6 +491,16 @@ export class EarnFiAgentClient {
                 verification_method: params.verificationMethod ?? 'manual',
                 execution_mode: params.executionMode ?? 'human',
                 token_gate: tokenGateParam(params.tokenGate),
+                quick: params.quick ? 'true' : undefined,
+                effort_bucket: params.effortBucket,
+                target_clients: params.targetClients ? JSON.stringify(params.targetClients) : undefined,
+                require_sgt_holder: seeker ? 'true' : undefined,
+                seeker_only: seeker ? 'true' : undefined,
+                payment_method: params.paymentMethod,
+                targeting_policy: params.targetingPolicy
+                    ? JSON.stringify(params.targetingPolicy)
+                    : undefined,
+                min_rank: params.minRank,
             }),
             token
         );
@@ -492,9 +535,18 @@ export class EarnFiAgentClient {
         instructions: string;
         totalPrizePool: string;
         tokenGate?: TokenGateInput;
+        quick?: boolean;
+        effortBucket?: string;
+        targetClients?: string[];
+        requireSgtHolder?: boolean;
+        seekerOnly?: boolean;
+        paymentMethod?: 'connected_wallet' | 'creator_wallet';
+        targetingPolicy?: Record<string, unknown>;
+        minRank?: string;
         agentToken?: string;
     }) {
         const token = this.resolveAgentToken(params.agentToken);
+        const seeker = params.requireSgtHolder ?? params.seekerOnly;
         return this.x402Get(
             '/jobs/contest',
             paramsToRecord({
@@ -502,6 +554,16 @@ export class EarnFiAgentClient {
                 instructions: params.instructions,
                 total_prize_pool: params.totalPrizePool,
                 token_gate: tokenGateParam(params.tokenGate),
+                quick: params.quick ? 'true' : undefined,
+                effort_bucket: params.effortBucket,
+                target_clients: params.targetClients ? JSON.stringify(params.targetClients) : undefined,
+                require_sgt_holder: seeker ? 'true' : undefined,
+                seeker_only: seeker ? 'true' : undefined,
+                payment_method: params.paymentMethod,
+                targeting_policy: params.targetingPolicy
+                    ? JSON.stringify(params.targetingPolicy)
+                    : undefined,
+                min_rank: params.minRank,
             }),
             token
         );
@@ -561,6 +623,130 @@ export class EarnFiAgentClient {
             },
             token
         );
+    }
+
+    // ── Human Actions ──────────────────────────────────────────────────────
+
+    /** Request any supported kind of human judgment or work. */
+    createHumanAction(params: HumanActionCreateInput): Promise<X402Response & { json: HumanActionCreateResponse }> {
+        const token = this.resolveAgentToken(params.agentToken);
+        return this.x402Post(
+            '/actions',
+            {
+                action_type: params.actionType,
+                prompt: params.prompt,
+                slots: params.slots,
+                reward_per_user: params.rewardPerUser,
+                title: params.title,
+                options: params.options,
+                verification_method: params.verificationMethod,
+                token_gate: tokenGateParam(params.tokenGate),
+                quick: params.quick,
+                effort_bucket: params.effortBucket,
+                target_clients: params.targetClients,
+                require_sgt_holder: params.requireSgtHolder ?? params.seekerOnly,
+                seeker_only: params.seekerOnly ?? params.requireSgtHolder,
+                payment_method: params.paymentMethod,
+                targeting_policy: params.targetingPolicy,
+                min_rank: params.minRank,
+            },
+            token
+        ) as Promise<X402Response & { json: HumanActionCreateResponse }>;
+    }
+
+    /** Get a quote without signing or sending a payment. */
+    quoteHumanAction(params: HumanActionCreateInput): Promise<X402Response & { json: HumanActionCreateResponse }> {
+        const token = this.resolveAgentToken(params.agentToken);
+        return this.quoteGet(
+            `/actions/${params.actionType}`,
+            paramsToRecord({
+                prompt: params.prompt,
+                slots: params.slots,
+                reward_per_user: params.rewardPerUser,
+                title: params.title,
+                options: params.options ? JSON.stringify(params.options) : undefined,
+                verification_method: params.verificationMethod,
+                token_gate: tokenGateParam(params.tokenGate),
+                quick: params.quick === undefined ? undefined : params.quick ? 'true' : 'false',
+                effort_bucket: params.effortBucket,
+                target_clients: params.targetClients ? JSON.stringify(params.targetClients) : undefined,
+                require_sgt_holder: (params.requireSgtHolder ?? params.seekerOnly) ? 'true' : undefined,
+                seeker_only: (params.seekerOnly ?? params.requireSgtHolder) ? 'true' : undefined,
+                payment_method: params.paymentMethod,
+                targeting_policy: params.targetingPolicy
+                    ? JSON.stringify(params.targetingPolicy)
+                    : undefined,
+                min_rank: params.minRank,
+            }),
+            token
+        ) as Promise<X402Response & { json: HumanActionCreateResponse }>;
+    }
+
+    /** Poll a Human Action using its per-action secret or your agent token. */
+    getHumanActionResult<T = unknown>(
+        actionId: string,
+        auth: JobAuth = {}
+    ): Promise<JsonResponse & { json: HumanActionResult<T> }> {
+        return this.get(
+            `/actions/${encodeURIComponent(actionId)}/result`,
+            this.jobAuthParams(auth),
+            this.jobAuthHeaders(auth)
+        ) as Promise<JsonResponse & { json: HumanActionResult<T> }>;
+    }
+
+    waitForHumanAction<T = unknown>(
+        actionId: string,
+        auth: JobAuth = {},
+        opts?: { intervalMs?: number; timeoutMs?: number }
+    ): Promise<JsonResponse & { json: HumanActionResult<T> }> {
+        return pollUntil(() => this.getHumanActionResult<T>(actionId, auth), {
+            intervalMs: opts?.intervalMs ?? 60000,
+            timeoutMs: opts?.timeoutMs,
+            until: (response) =>
+                response.status === 200 && (response.json as HumanActionResult<T>).complete === true,
+        }) as Promise<JsonResponse & { json: HumanActionResult<T> }>;
+    }
+
+    askHuman(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'ask' });
+    }
+
+    reviewWithHumans(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'review' });
+    }
+
+    askHumansToVote(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'vote' });
+    }
+
+    testWithHumans(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'test' });
+    }
+
+    researchWithHumans(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'research' });
+    }
+
+    verifyWithHumans(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'verify' });
+    }
+
+    moderateWithHumans(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'moderate' });
+    }
+
+    collectHumanFeedback(params: Omit<HumanActionCreateInput, 'actionType'>) {
+        return this.createHumanAction({ ...params, actionType: 'feedback' });
+    }
+
+    /** @deprecated Use createHumanAction. */
+    createAction(params: HumanActionCreateInput) {
+        return this.createHumanAction(params);
+    }
+
+    /** @deprecated Use getHumanActionResult. */
+    getActionResult<T = unknown>(actionId: string, auth: JobAuth = {}) {
+        return this.getHumanActionResult<T>(actionId, auth);
     }
 
     // ── Polling ─────────────────────────────────────────────────────────────
@@ -644,6 +830,17 @@ export class EarnFiAgentClient {
         );
     }
 
+    /** Close a job/contest and refund unused slot rewards to Creator Wallet Paid. */
+    closeJob(jobId: string, agentToken?: string) {
+        const token = this.resolveAgentToken(agentToken);
+        return this.post(
+            `/jobs/${encodeURIComponent(jobId)}/close`,
+            { agent_token: token },
+            undefined,
+            this.agentHeaders(token)
+        );
+    }
+
     listPendingVerifications(jobId: string, agentToken?: string) {
         const token = this.resolveAgentToken(agentToken);
         const auth = this.mergeAuth(token, {});
@@ -719,3 +916,9 @@ export type EarnFiHttpClientConfig = AgentClientOptions;
 export type EarnFiWalletLike = WalletLike;
 
 export type { JobCreatedResponse, RegisterSuccessResponse };
+export type {
+    HumanActionCreateInput,
+    HumanActionCreateResponse,
+    HumanActionResult,
+    HumanActionType,
+};

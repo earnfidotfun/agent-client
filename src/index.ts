@@ -11,6 +11,10 @@ export {
     EarnFiHttpClient,
     type EarnFiHttpClientConfig,
     type EarnFiWalletLike,
+    type HumanActionCreateInput,
+    type HumanActionCreateResponse,
+    type HumanActionResult,
+    type HumanActionType,
     type JobCreatedResponse,
     type RegisterSuccessResponse,
 } from './client.js';
@@ -30,6 +34,7 @@ export {
     type X402Response,
 } from './types.js';
 
+export { HUMAN_ACTION_TYPES } from './types/api.js';
 export type { CatalogResponse, EarnFiErrorBody } from './types/api.js';
 
 export { b64decodeJson, b64encodeJson, getPaymentRequiredHeader, signExactSvmPayment } from './x402.js';

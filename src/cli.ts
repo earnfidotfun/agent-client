@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * EarnFi Agent CLI — register, quote, paid create, poll, preflight.
+ * EarnFi Agent CLI for registration, Human Actions, paid creates, polling, and preflight.
  */
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
@@ -30,6 +30,10 @@ Usage:
   earnfi-agent preflight --secret-key-bs58 KEY [--rpc URL]
   earnfi-agent quote-social --token TOKEN --task-type follow --slots 2 --reward 0.03 [--base-url URL]
   earnfi-agent create-social --token TOKEN --task-type follow --slots 2 --reward 0.03 --secret-key-bs58 KEY [--content-url URL] [--base-url URL]
+  earnfi-agent quote-action --type review --prompt "Review this page" --slots 3 --reward 0.10
+  earnfi-agent create-action --type review --prompt "Review this page" --slots 3 --reward 0.10 --secret-key-bs58 KEY
+  earnfi-agent ask|review|vote|test|research|verify|moderate|feedback --prompt "..." --slots 3 --reward 0.10 --secret-key-bs58 KEY
+  earnfi-agent poll-action --action-id ID --secret SECRET
   earnfi-agent poll-job --job-id ID --secret SECRET [--base-url URL]
 
 Environment:
@@ -190,6 +194,69 @@ async function main() {
         });
         console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
         process.exit(res.status === 200 ? 0 : 1);
+    }
+
+    const actionAliases = ['ask', 'review', 'vote', 'test', 'research', 'verify', 'moderate', 'feedback'] as const;
+    if (cmd === 'quote-action' || cmd === 'create-action' || actionAliases.includes(cmd as (typeof actionAliases)[number])) {
+        const token = arg('--token') || process.env.EARNFI_AGENT_TOKEN || '';
+        const type = actionAliases.includes(cmd as (typeof actionAliases)[number])
+            ? (cmd as (typeof actionAliases)[number])
+            : (arg('--type') as (typeof actionAliases)[number] | undefined);
+        const prompt = arg('--prompt') || '';
+        const slots = parseInt(arg('--slots') || '3', 10);
+        const reward = arg('--reward') || '0.05';
+        const options = (arg('--options') || '').split('|').map((v) => v.trim()).filter(Boolean);
+        if (!token || !type || !actionAliases.includes(type) || !prompt) {
+            console.error(`${cmd} requires --type when applicable, --prompt, and --token or EARNFI_AGENT_TOKEN`);
+            process.exit(1);
+        }
+        if (cmd === 'quote-action') {
+            const client = new EarnFiAgentClient({ baseUrl: base, agentToken: token });
+            const res = await client.quoteHumanAction({
+                actionType: type,
+                prompt,
+                slots,
+                rewardPerUser: reward,
+                options: options.length ? options : undefined,
+            });
+            console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
+            return;
+        }
+        const skB58 = arg('--secret-key-bs58') || process.env.SOLANA_SECRET_KEY_B58 || '';
+        if (!skB58) {
+            console.error(`${cmd} requires --secret-key-bs58 or SOLANA_SECRET_KEY_B58`);
+            process.exit(1);
+        }
+        const { wallet } = walletFromSecret(skB58);
+        const client = new EarnFiAgentClient({
+            baseUrl: base,
+            agentToken: token,
+            wallet,
+            connection: new Connection(rpcUrl()),
+        });
+        const res = await client.createHumanAction({
+            actionType: type,
+            prompt,
+            slots,
+            rewardPerUser: reward,
+            options: options.length ? options : undefined,
+        });
+        console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
+        process.exit(res.status === 200 ? 0 : 1);
+    }
+
+    if (cmd === 'poll-action') {
+        const actionId = arg('--action-id') || '';
+        const secret = arg('--secret') || '';
+        const token = arg('--token') || process.env.EARNFI_AGENT_TOKEN || '';
+        if (!actionId || (!secret && !token)) {
+            console.error('poll-action requires --action-id and either --secret or --token');
+            process.exit(1);
+        }
+        const client = new EarnFiAgentClient({ baseUrl: base, agentToken: token || undefined });
+        const res = await client.getHumanActionResult(actionId, secret ? { secret } : { agentToken: token });
+        console.log(`HTTP ${res.status}\n${JSON.stringify(res.json, null, 2)}`);
+        return;
     }
 
     if (cmd === 'poll-job') {

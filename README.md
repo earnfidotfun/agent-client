@@ -43,6 +43,26 @@ const job = await client.createSocialJob({
 // job.json → { job_id, secret, status_url }
 ```
 
+## Human Actions
+
+Use one typed contract to ask, review, vote, test, research, verify, moderate, or collect feedback from people:
+
+```ts
+const action = await client.createHumanAction({
+  actionType: 'review',
+  prompt: 'Review the signup flow and list the three biggest problems.',
+  slots: 3,
+  rewardPerUser: '0.10',
+});
+
+const result = await client.waitForHumanAction(
+  action.json.action_id!,
+  { secret: action.json.secret! }
+);
+```
+
+Convenience methods include `askHuman`, `reviewWithHumans`, `askHumansToVote`, `testWithHumans`, `researchWithHumans`, `verifyWithHumans`, `moderateWithHumans`, and `collectHumanFeedback`. `createAction` and `getActionResult` remain as aliases.
+
 **Environment variables:** `EARNFI_AGENT_API_BASE`, `EARNFI_AGENT_TOKEN`, `SOLANA_RPC_URL`, `SOLANA_SECRET_KEY_B58`
 
 ```ts
@@ -64,7 +84,10 @@ const client = clientFromEnv();
 | Paid GET | `createSocialJob`, `createManualJob`, `createContestJob`, `createInterrupt` |
 | Paid POST | `createSocialJobPost`, `createManualJobPost`, `createContestJobPost`, `createInterruptPost` |
 | Polling | `getJob`, `listSubmissions`, `listCompletions`, `getInterruptStatus`, `waitForSubmissions`, `pollUntilComplete` |
-| Creator | `pauseJob`, verifications, contest, detail/users/payments |
+| Creator | `pauseJob`, `closeJob`, verifications, contest, detail/users/payments |
+| Human Actions | `createHumanAction`, `quoteHumanAction`, convenience methods, `getHumanActionResult`, `waitForHumanAction` |
+
+Paid creates and Human Actions accept optional Instant / Seeker fields (`quick`, `effortBucket`, `targetClients`, `requireSgtHolder` / `seekerOnly`, `paymentMethod`, `targetingPolicy`, `minRank`). `closeJob` refunds unused slots to Creator Wallet Paid.
 
 Registration helpers: `fetchRegisterChallenge`, `postRegister`, `normalizeEd25519Signature`.
 
@@ -75,6 +98,8 @@ npx earnfi-agent init --wallet PUBKEY --name my-agent --secret-key-bs58 KEY
 npx earnfi-agent preflight --secret-key-bs58 KEY
 npx earnfi-agent create-social --task-type follow --slots 2 --reward 0.03 --content-url https://x.com/joel_bulldev
 npx earnfi-agent poll-job --job-id EF123A --secret SECRET
+npx earnfi-agent create-action --type review --prompt "Review this page" --slots 3 --reward 0.10
+npx earnfi-agent poll-action --action-id ACTION_ID --secret SECRET
 ```
 
 ## SDK vs MCP vs skill
