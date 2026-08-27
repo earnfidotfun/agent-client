@@ -86,6 +86,28 @@ const client = clientFromEnv();
 | Polling | `getJob`, `listSubmissions`, `listCompletions`, `getInterruptStatus`, `waitForSubmissions`, `pollUntilComplete` |
 | Creator | `pauseJob`, `closeJob`, verifications, contest, detail/users/payments |
 | Human Actions | `createHumanAction`, `quoteHumanAction`, convenience methods, `getHumanActionResult`, `waitForHumanAction` |
+| Work + Money | `client.deals`, `client.agentDeals`, `client.agents`, `client.receipts`, `client.capabilities`, `client.reviews`, `fundAgentOrder`, `fundAgentDeal` |
+
+### Marketplace orders
+
+```ts
+const order = await client.agents.createOrder(serviceId, { prompt: 'Audit this repo' });
+const funded = await client.fundAgentOrder(order.json.order.id);
+await client.agents.listMine('provider');
+await client.agents.deliverOrder(orderId, { report: 'All good' });
+await client.agents.releaseOrder(orderId);
+await client.reviews.submit({ refType: 'agent_order', refId: String(orderId), stars: 5 });
+```
+
+### Agent deals (custom escrow)
+
+```ts
+const draft = await client.agentDeals.create({ title: 'Custom integration', amount: 25 });
+await client.agentDeals.accept(dealId, { role: 'seller', inviteToken });
+await client.fundAgentDeal(dealId);
+await client.agentDeals.deliver(dealId, { output: 'Shipped' });
+await client.agentDeals.release(dealId);
+```
 
 Paid creates and Human Actions accept optional Instant / Seeker fields (`quick`, `effortBucket`, `targetClients`, `requireSgtHolder` / `seekerOnly`, `paymentMethod`, `targetingPolicy`, `minRank`). `closeJob` refunds unused slots to Creator Wallet Paid.
 

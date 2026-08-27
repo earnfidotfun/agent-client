@@ -48,6 +48,17 @@ export { pollUntil } from './poll.js';
 export type { PollOptions } from './poll.js';
 
 export { clientFromEnv, walletFromEnv } from './env.js';
+
+export {
+    EarnFiDeals,
+    EarnFiAgentDeals,
+    EarnFiAgents,
+    EarnFiReceipts,
+    EarnFiCapabilities,
+    EarnFiReviews,
+    WORK_REVIEW_REF_TYPES,
+} from './work-money.js';
+export type { WorkReviewRefType, WorkReviewInput } from './work-money.js';
 export type { FromEnvOptions } from './env.js';
 
 /** Alias: {@link clientFromEnv} */

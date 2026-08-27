@@ -21,6 +21,14 @@ import { b64decodeJson, b64encodeJson, getPaymentRequiredHeader, signExactSvmPay
 import { fetchRegisterChallenge, postRegister } from './register.js';
 import { assertPreflightPayment, preflightPayment as runPreflightPayment } from './preflight.js';
 import { pollUntil } from './poll.js';
+import {
+    EarnFiDeals,
+    EarnFiAgentDeals,
+    EarnFiAgents,
+    EarnFiReceipts,
+    EarnFiCapabilities,
+    EarnFiReviews,
+} from './work-money.js';
 
 function tokenGateParam(gate?: TokenGateInput): string | undefined {
     if (gate === undefined || gate === null) return undefined;
@@ -61,6 +69,12 @@ export class EarnFiAgentClient {
     private readonly preferAgentTokenHeader: boolean;
     /** Skip USDC preflight before signing (default false) */
     readonly skipPaymentPreflight: boolean;
+    readonly deals: EarnFiDeals;
+    readonly agentDeals: EarnFiAgentDeals;
+    readonly agents: EarnFiAgents;
+    readonly receipts: EarnFiReceipts;
+    readonly capabilities: EarnFiCapabilities;
+    readonly reviews: EarnFiReviews;
 
     constructor(opts: AgentClientOptions = {}) {
         this.baseUrl = (opts.baseUrl ?? EARNFI_DEFAULT_API_BASE).replace(/\/$/, '');
@@ -70,6 +84,22 @@ export class EarnFiAgentClient {
         this.fetchImpl = opts.fetchImpl ?? fetch;
         this.preferAgentTokenHeader = opts.preferAgentTokenHeader !== false;
         this.skipPaymentPreflight = opts.skipPaymentPreflight === true;
+        const workReq = (method: string, path: string, body?: unknown) => this.workRequest(method, path, body);
+        this.deals = new EarnFiDeals(workReq);
+        this.agentDeals = new EarnFiAgentDeals(workReq);
+        this.agents = new EarnFiAgents(workReq);
+        this.receipts = new EarnFiReceipts(workReq);
+        this.capabilities = new EarnFiCapabilities(workReq);
+        this.reviews = new EarnFiReviews(workReq);
+    }
+
+    /** JSON helper for Work + Money facades on the Agent API. */
+    private workRequest(method: string, path: string, body?: unknown): Promise<JsonResponse> {
+        const headers = this.agentHeaders(this.agentToken);
+        if (method === 'GET') {
+            return this.get(path, undefined, headers);
+        }
+        return this.post(path, body ?? {}, undefined, headers);
     }
 
     private resolveAgentToken(override?: string): string {
@@ -906,6 +936,22 @@ export class EarnFiAgentClient {
         const token = this.resolveAgentToken(agentToken);
         const auth = this.mergeAuth(token, {});
         return this.get(`/jobs/${encodeURIComponent(jobId)}/payments`, auth.params, auth.headers);
+    }
+
+    // ── Work + Money (x402 fund helpers) ────────────────────────────────────
+
+    /** Fund a marketplace order (402 → sign → retry). */
+    fundAgentOrder(orderId: number, opts: { settlementId?: number; agentToken?: string } = {}) {
+        const body: Record<string, unknown> = {};
+        if (opts.settlementId !== undefined) body.settlement_id = opts.settlementId;
+        return this.x402Post(`/agents/orders/${orderId}/fund`, body, opts.agentToken);
+    }
+
+    /** Fund an agent escrow deal (402 → sign → retry). */
+    fundAgentDeal(dealId: number, opts: { settlementId?: number; agentToken?: string } = {}) {
+        const body: Record<string, unknown> = {};
+        if (opts.settlementId !== undefined) body.settlement_id = opts.settlementId;
+        return this.x402Post(`/agents/deals/${dealId}/fund`, body, opts.agentToken);
     }
 }
 
