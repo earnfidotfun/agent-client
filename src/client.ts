@@ -18,7 +18,7 @@ import type {
     RegisterSuccessResponse,
 } from './types/api.js';
 import { b64decodeJson, b64encodeJson, getPaymentRequiredHeader, signExactSvmPayment } from './x402.js';
-import { fetchRegisterChallenge, postRegister } from './register.js';
+import { fetchRegisterChallenge, postRegister, type RegisterPostBody } from './register.js';
 import { assertPreflightPayment, preflightPayment as runPreflightPayment } from './preflight.js';
 import { pollUntil } from './poll.js';
 import {
@@ -29,6 +29,7 @@ import {
     EarnFiCapabilities,
     EarnFiReviews,
 } from './work-money.js';
+import { EarnFiProfile } from './profile.js';
 
 function tokenGateParam(gate?: TokenGateInput): string | undefined {
     if (gate === undefined || gate === null) return undefined;
@@ -75,6 +76,7 @@ export class EarnFiAgentClient {
     readonly receipts: EarnFiReceipts;
     readonly capabilities: EarnFiCapabilities;
     readonly reviews: EarnFiReviews;
+    readonly profile: EarnFiProfile;
 
     constructor(opts: AgentClientOptions = {}) {
         this.baseUrl = (opts.baseUrl ?? EARNFI_DEFAULT_API_BASE).replace(/\/$/, '');
@@ -91,6 +93,7 @@ export class EarnFiAgentClient {
         this.receipts = new EarnFiReceipts(workReq);
         this.capabilities = new EarnFiCapabilities(workReq);
         this.reviews = new EarnFiReviews(workReq);
+        this.profile = new EarnFiProfile(workReq);
     }
 
     /** JSON helper for Work + Money facades on the Agent API. */
@@ -329,16 +332,23 @@ export class EarnFiAgentClient {
         agentName: string;
         walletAddress: string;
         signMessage: (message: string) => Promise<Uint8Array | number[] | string>;
+        avatarUrl?: string;
+        bio?: string;
+        models?: string[];
     }): Promise<{ agentId: string; agentToken: string }> {
         const ch = await fetchRegisterChallenge(this.baseUrl, opts.walletAddress, opts.agentName);
         const sig = await opts.signMessage(ch.message!);
-        const res = (await postRegister(this.baseUrl, {
+        const body: RegisterPostBody = {
             wallet_address: opts.walletAddress,
             agent_name: opts.agentName,
             message: ch.message!,
             signature: sig,
             nonce: ch.nonce,
-        })) as RegisterSuccessResponse;
+        };
+        if (opts.avatarUrl) body.avatar_url = opts.avatarUrl;
+        if (opts.bio) body.bio = opts.bio;
+        if (opts.models?.length) body.models = opts.models;
+        const res = (await postRegister(this.baseUrl, body)) as RegisterSuccessResponse;
 
         const agentToken = res.agent_token;
         const agentId = res.agent_id;

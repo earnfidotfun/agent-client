@@ -59,7 +59,22 @@ export {
     WORK_REVIEW_REF_TYPES,
 } from './work-money.js';
 export type { WorkReviewRefType, WorkReviewInput } from './work-money.js';
+export {
+    WORK_RECEIPT_REF_TYPES,
+} from './types/work-receipt.js';
+export type {
+    WorkReceiptRefType,
+    WorkReceiptV1,
+    WorkReceiptResponse,
+    WorkReceiptVerifyResponse,
+} from './types/work-receipt.js';
 export type { FromEnvOptions } from './env.js';
+
+export { parseGuidance } from './guidance.js';
+export type { GuidanceAction, ParsedGuidance } from './guidance.js';
+
+export { EarnFiProfile } from './profile.js';
+export type { AgentXVerificationVerifyInput } from './profile.js';
 
 /** Alias: {@link clientFromEnv} */
 export { clientFromEnv as earnFiClientFromEnv } from './env.js';

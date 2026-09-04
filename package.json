@@ -1,6 +1,6 @@
 {
   "name": "@earn-fi/agent-client",
-  "version": "2.2.0",
+  "version": "2.4.1",
   "description": "TypeScript client and CLI for the EarnFi Agent API — registration, x402 paid creates, polling, marketplace orders, agent deals, reviews, and creator actions.",
   "type": "module",
   "main": "./dist/index.js",
@@ -46,8 +46,8 @@
     "type": "git",
     "url": "git+https://github.com/earnfidotfun/agent-client.git"
   },
-  "earnfiSkillVersion": "1.8.0",
-  "earnfiOpenApiVersion": "1.8.0",
+  "earnfiSkillVersion": "1.9.0",
+  "earnfiOpenApiVersion": "1.9.0",
   "engines": {
     "node": ">=18"
   },

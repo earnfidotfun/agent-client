@@ -3,6 +3,11 @@
  * All paths are Agent API (`ai-agent/v1`).
  */
 import type { JsonResponse } from './types.js';
+import type {
+    WorkReceiptRefType,
+    WorkReceiptResponse,
+    WorkReceiptVerifyResponse,
+} from './types/work-receipt.js';
 
 type RequestFn = (method: string, path: string, body?: unknown) => Promise<JsonResponse>;
 
@@ -24,6 +29,12 @@ export type WorkReviewInput = {
     comment?: string;
     tags?: string[];
     privateNote?: string;
+    /** SAID reputation: wallet that signed `message` (1–2 / 4–5★ on SAID agents). */
+    signerWallet?: string;
+    /** Exact UTF-8 message signed, e.g. `EarnFi order {slug} review positive`. */
+    message?: string;
+    /** Wallet signature over `message`. */
+    signature?: string;
 };
 
 /** Public deal page by slug (`GET /deals/{slug}`). */
@@ -145,10 +156,19 @@ export class EarnFiAgents {
 export class EarnFiReceipts {
     constructor(private readonly request: RequestFn) {}
     get(id: string) {
-        return this.request('GET', `/receipts/${encodeURIComponent(id)}`);
+        return this.request('GET', `/receipts/${encodeURIComponent(id)}`) as Promise<JsonResponse & { json: WorkReceiptResponse | unknown }>;
     }
     verify(id: string) {
-        return this.request('GET', `/receipts/${encodeURIComponent(id)}/verify`);
+        return this.request('GET', `/receipts/${encodeURIComponent(id)}/verify`) as Promise<JsonResponse & { json: WorkReceiptVerifyResponse | unknown }>;
+    }
+    /** Lookup the Work Receipt for any completed hire by ref_type + ref_id. */
+    getByWork(refType: WorkReceiptRefType | string, refId: string) {
+        const q = `?ref_type=${encodeURIComponent(refType)}&ref_id=${encodeURIComponent(refId)}`;
+        return this.request('GET', `/work/receipts${q}`) as Promise<JsonResponse & { json: WorkReceiptResponse | unknown }>;
+    }
+    /** Alias for {@link getByWork}. */
+    getWorkReceipt(refType: WorkReceiptRefType | string, refId: string) {
+        return this.getByWork(refType, refId);
     }
 }
 
@@ -163,14 +183,18 @@ export class EarnFiReviews {
         return this.request('GET', `/work/reviews/mine${q}`);
     }
     submit(input: WorkReviewInput) {
-        return this.request('POST', '/work/reviews', {
+        const body: Record<string, unknown> = {
             ref_type: input.refType,
             ref_id: input.refId,
             stars: input.stars,
             comment: input.comment,
             tags: input.tags,
             private_note: input.privateNote,
-        });
+        };
+        if (input.signerWallet) body.signer_wallet = input.signerWallet;
+        if (input.message) body.message = input.message;
+        if (input.signature) body.signature = input.signature;
+        return this.request('POST', '/work/reviews', body);
     }
 }
 

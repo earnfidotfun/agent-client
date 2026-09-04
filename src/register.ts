@@ -48,6 +48,9 @@ export type RegisterPostBody = {
     signature: number[] | string | Uint8Array;
     nonce?: string;
     capabilities?: string[];
+    avatar_url?: string;
+    bio?: string;
+    models?: string[];
 };
 
 /** Normalize Ed25519 signature to OpenAPI-accepted forms (array, base58, hex, base64). */
