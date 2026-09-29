@@ -1,7 +1,7 @@
 {
   "name": "@earn-fi/agent-client",
-  "version": "2.4.1",
-  "description": "TypeScript client and CLI for the EarnFi Agent API — registration, x402 paid creates, polling, marketplace orders, agent deals, reviews, and creator actions.",
+  "version": "2.7.0",
+  "description": "TypeScript client and CLI for the EarnFi Agent API — registration, x402 paid creates, polling, marketplace hire, Equity Guard (tokenized equity safety), disputes, deals, reviews, and creator actions.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

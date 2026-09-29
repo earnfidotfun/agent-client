@@ -75,6 +75,7 @@ Work Console:
   earnfi-agent marketplace list [--type services|agents] [--q QUERY] [--capability CAP] [--page N] [--per-page N] [--json]
   earnfi-agent marketplace get --agent-id ID [--json]
   earnfi-agent order create --service-id ID [--input JSON] [--prompt TEXT] [--token TOKEN] [--json]
+  earnfi-agent order hire --service-id ID [--input JSON] [--prompt TEXT] [--settlement-id N] [--secret-key-bs58 KEY] [--token TOKEN] [--json]
   earnfi-agent order fund --id ID [--settlement-id N] [--secret-key-bs58 KEY] [--token TOKEN] [--json]
   earnfi-agent order deliver --id ID [--output JSON] [--token TOKEN] [--json]
   earnfi-agent order release --id ID [--token TOKEN] [--json]
@@ -82,6 +83,10 @@ Work Console:
   earnfi-agent order dispute --id ID --reason TEXT [--token TOKEN] [--json]
   earnfi-agent order get --id ID [--secret SECRET] [--token TOKEN] [--json]
   earnfi-agent order mine [--role provider|buyer] [--page N] [--per-page N] [--token TOKEN] [--json]
+  earnfi-agent balance [--token TOKEN] [--json]
+  earnfi-agent withdraw --amount N [--idempotency-key KEY] [--token TOKEN] [--json]
+  earnfi-agent disputes list [--page N] [--per-page N] [--token TOKEN] [--json]
+  earnfi-agent disputes get --id ID [--token TOKEN] [--json]
   earnfi-agent deal create --title TEXT [--amount N] [--body JSON] [--token TOKEN] [--json]
   earnfi-agent deal list [--page N] [--per-page N] [--token TOKEN] [--json]
   earnfi-agent deal get --slug SLUG [--token TOKEN] [--json]
@@ -311,6 +316,21 @@ async function cmdOrderCreate() {
     printResponse(res, true);
 }
 
+async function cmdOrderHire() {
+    const serviceId = parseInt(arg('--service-id') || '0', 10);
+    if (!serviceId) {
+        console.error('order hire requires --service-id');
+        process.exit(1);
+    }
+    const input = parseJsonArg('--input');
+    const prompt = arg('--prompt');
+    if (prompt) input.prompt = prompt;
+    const settlementId = arg('--settlement-id') ? parseInt(arg('--settlement-id')!, 10) : undefined;
+    const client = workClient({ wallet: true });
+    const res = await client.hireAndFund(serviceId, { input, settlementId });
+    printResponse(res, true);
+}
+
 async function cmdOrderFund() {
     const id = parseInt(arg('--id') || '0', 10);
     if (!id) {
@@ -388,6 +408,49 @@ async function cmdOrderMine() {
     const perPage = arg('--per-page') ? parseInt(arg('--per-page')!, 10) : undefined;
     const client = workClient();
     const res = await client.agents.listMine(role, page, perPage);
+    printResponse(res);
+}
+
+async function cmdBalance() {
+    const client = workClient();
+    const res = await client.agents.getBalance();
+    printResponse(res);
+}
+
+async function cmdWithdraw() {
+    const amount = arg('--amount');
+    const amountMicro = arg('--amount-micro');
+    if (!amount && !amountMicro) {
+        console.error('withdraw requires --amount or --amount-micro');
+        process.exit(1);
+    }
+    const client = workClient();
+    const res = await client.agents.withdraw(
+        {
+            amount: amount || undefined,
+            amount_micro: amountMicro || undefined,
+        },
+        arg('--idempotency-key') || ''
+    );
+    printResponse(res, true);
+}
+
+async function cmdDisputesList() {
+    const page = arg('--page') ? parseInt(arg('--page')!, 10) : undefined;
+    const perPage = arg('--per-page') ? parseInt(arg('--per-page')!, 10) : undefined;
+    const client = workClient();
+    const res = await client.agents.listDisputes(page, perPage);
+    printResponse(res);
+}
+
+async function cmdDisputesGet() {
+    const id = parseInt(arg('--id') || '0', 10);
+    if (!id) {
+        console.error('disputes get requires --id');
+        process.exit(1);
+    }
+    const client = workClient();
+    const res = await client.agents.getDispute(id);
     printResponse(res);
 }
 
@@ -640,6 +703,11 @@ async function main() {
         return;
     }
 
+    if (cmd === 'order' && (sub === 'hire' || sub === 'create-and-fund')) {
+        await cmdOrderHire();
+        return;
+    }
+
     if (cmd === 'order' && sub === 'fund') {
         await cmdOrderFund();
         return;
@@ -672,6 +740,26 @@ async function main() {
 
     if (cmd === 'order' && sub === 'mine') {
         await cmdOrderMine();
+        return;
+    }
+
+    if (cmd === 'balance') {
+        await cmdBalance();
+        return;
+    }
+
+    if (cmd === 'withdraw') {
+        await cmdWithdraw();
+        return;
+    }
+
+    if (cmd === 'disputes' && sub === 'list') {
+        await cmdDisputesList();
+        return;
+    }
+
+    if (cmd === 'disputes' && sub === 'get') {
+        await cmdDisputesGet();
         return;
     }
 

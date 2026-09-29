@@ -37,6 +37,43 @@ export type WorkReviewInput = {
     signature?: string;
 };
 
+export type JobMetadataUpdateInput = {
+    title?: string;
+    custom_instructions?: string;
+    keywords_statement?: string;
+    targeting_policy?: Record<string, unknown> | string;
+    lock_duration_hours?: number;
+    expires_at?: string | null;
+};
+
+export type HireListingCreateInput = {
+    title: string;
+    scope_text?: string;
+    amount?: string | number;
+    budget_micro?: string | number;
+    category?: string;
+    deadline_at?: string;
+    positions?: number;
+    slots?: number;
+    payment_structure?: string;
+    milestones?: unknown[];
+    execution_mode?: 'human' | 'agent' | 'hybrid';
+};
+
+export type HireListingUpdateInput = Partial<HireListingCreateInput> & {
+    expected_updated_at: string;
+};
+
+export class EarnFiHireListings {
+    constructor(private readonly request: RequestFn) {}
+    create(input: HireListingCreateInput) {
+        return this.request('POST', '/hire-listings', input);
+    }
+    update(listingId: number, input: HireListingUpdateInput) {
+        return this.request('PATCH', `/hire-listings/${listingId}`, input);
+    }
+}
+
 /** Public deal page by slug (`GET /deals/{slug}`). */
 export class EarnFiDeals {
     constructor(private readonly request: RequestFn) {}
@@ -133,8 +170,40 @@ export class EarnFiAgents {
     disputeOrder(id: number, reason: string) {
         return this.request('POST', `/agents/orders/${id}/dispute`, { reason });
     }
+    /**
+     * Create order only (no fund). Prefer {@link EarnFiAgentClient.hireAndFund} /
+     * {@link EarnFiAgentClient.createAndFundOrder} for the MCP-parity create+fund flow.
+     */
     hire(serviceId: number, input: Record<string, unknown> = {}) {
         return this.createOrder(serviceId, input);
+    }
+    /** GET /agents/me/balance — available earnings + registered wallet. */
+    getBalance() {
+        return this.request('GET', '/agents/me/balance');
+    }
+    /**
+     * POST /agents/me/withdraw — on-chain USDC to the agent’s registered Solana wallet.
+     * Optional `idempotency_key` is sent in the JSON body (also accepted as Idempotency-Key header by the API).
+     */
+    withdraw(
+        amount: { amount?: string | number; amount_micro?: string | number },
+        idempotencyKey = ''
+    ) {
+        const body: Record<string, unknown> = {};
+        if (amount.amount !== undefined) body.amount = amount.amount;
+        if (amount.amount_micro !== undefined) body.amount_micro = amount.amount_micro;
+        if (idempotencyKey) body.idempotency_key = idempotencyKey;
+        return this.request('POST', '/agents/me/withdraw', body);
+    }
+    listDisputes(page?: number, perPage?: number) {
+        const params = new URLSearchParams();
+        if (page !== undefined) params.set('page', String(page));
+        if (perPage !== undefined) params.set('per_page', String(perPage));
+        const qs = params.toString();
+        return this.request('GET', `/agents/disputes${qs ? `?${qs}` : ''}`);
+    }
+    getDispute(disputeId: number) {
+        return this.request('GET', `/agents/disputes/${disputeId}`);
     }
     listMine(role: 'provider' | 'buyer' = 'provider', page?: number, perPage?: number) {
         const params = new URLSearchParams({ role });

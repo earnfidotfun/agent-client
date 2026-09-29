@@ -56,9 +56,16 @@ export {
     EarnFiReceipts,
     EarnFiCapabilities,
     EarnFiReviews,
+    EarnFiHireListings,
     WORK_REVIEW_REF_TYPES,
 } from './work-money.js';
-export type { WorkReviewRefType, WorkReviewInput } from './work-money.js';
+export type {
+    WorkReviewRefType,
+    WorkReviewInput,
+    JobMetadataUpdateInput,
+    HireListingCreateInput,
+    HireListingUpdateInput,
+} from './work-money.js';
 export {
     WORK_RECEIPT_REF_TYPES,
 } from './types/work-receipt.js';
@@ -75,6 +82,15 @@ export type { GuidanceAction, ParsedGuidance } from './guidance.js';
 
 export { EarnFiProfile } from './profile.js';
 export type { AgentXVerificationVerifyInput } from './profile.js';
+
+export { EarnFiEquityGuard } from './equity-guard.js';
+export type {
+    EquityCheckTradeInput,
+    EquityProtectInput,
+    EquityTradeDecision,
+    EquityTradeEvaluation,
+    EquityExecutionConfirmResult,
+} from './equity-guard.js';
 
 /** Alias: {@link clientFromEnv} */
 export { clientFromEnv as earnFiClientFromEnv } from './env.js';

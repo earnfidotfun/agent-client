@@ -28,8 +28,11 @@ import {
     EarnFiReceipts,
     EarnFiCapabilities,
     EarnFiReviews,
+    EarnFiHireListings,
+    type JobMetadataUpdateInput,
 } from './work-money.js';
 import { EarnFiProfile } from './profile.js';
+import { EarnFiEquityGuard } from './equity-guard.js';
 
 function tokenGateParam(gate?: TokenGateInput): string | undefined {
     if (gate === undefined || gate === null) return undefined;
@@ -76,7 +79,9 @@ export class EarnFiAgentClient {
     readonly receipts: EarnFiReceipts;
     readonly capabilities: EarnFiCapabilities;
     readonly reviews: EarnFiReviews;
+    readonly hireListings: EarnFiHireListings;
     readonly profile: EarnFiProfile;
+    readonly equity: EarnFiEquityGuard;
 
     constructor(opts: AgentClientOptions = {}) {
         this.baseUrl = (opts.baseUrl ?? EARNFI_DEFAULT_API_BASE).replace(/\/$/, '');
@@ -93,7 +98,9 @@ export class EarnFiAgentClient {
         this.receipts = new EarnFiReceipts(workReq);
         this.capabilities = new EarnFiCapabilities(workReq);
         this.reviews = new EarnFiReviews(workReq);
+        this.hireListings = new EarnFiHireListings(workReq);
         this.profile = new EarnFiProfile(workReq);
+        this.equity = new EarnFiEquityGuard(workReq);
     }
 
     /** JSON helper for Work + Money facades on the Agent API. */
@@ -101,6 +108,9 @@ export class EarnFiAgentClient {
         const headers = this.agentHeaders(this.agentToken);
         if (method === 'GET') {
             return this.get(path, undefined, headers);
+        }
+        if (method === 'PATCH') {
+            return this.patch(path, body ?? {}, undefined, headers);
         }
         return this.post(path, body ?? {}, undefined, headers);
     }
@@ -188,6 +198,23 @@ export class EarnFiAgentClient {
     ) {
         return this.fetchJson(this.buildUrl(path, params), {
             method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...headers,
+            },
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+    }
+
+    async patch(
+        path: string,
+        body?: unknown,
+        params?: Record<string, string | undefined>,
+        headers?: Record<string, string>
+    ) {
+        return this.fetchJson(this.buildUrl(path, params), {
+            method: 'PATCH',
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
@@ -370,6 +397,18 @@ export class EarnFiAgentClient {
         }
         const out = await this.register(opts);
         return { ...out, registered: true };
+    }
+
+    /** POST /token/rotate — new agent_token; invalidates the previous one. */
+    rotateAgentToken(agentToken?: string) {
+        const t = this.resolveAgentToken(agentToken);
+        return this.post('/token/rotate', { agent_token: t }, undefined, this.agentHeaders(t));
+    }
+
+    /** POST /token/revoke — permanently revoke the current agent_token. */
+    revokeAgentToken(agentToken?: string) {
+        const t = this.resolveAgentToken(agentToken);
+        return this.post('/token/revoke', { agent_token: t }, undefined, this.agentHeaders(t));
     }
 
     /** Check USDC readiness without signing. Facilitator covers tx fees; fund wallet with USDC if ATA missing. */
@@ -881,6 +920,16 @@ export class EarnFiAgentClient {
         );
     }
 
+    updateJobMetadata(jobId: string, input: JobMetadataUpdateInput, agentToken?: string) {
+        const token = this.resolveAgentToken(agentToken);
+        return this.patch(
+            `/jobs/${encodeURIComponent(jobId)}/metadata`,
+            input,
+            undefined,
+            this.agentHeaders(token)
+        );
+    }
+
     listPendingVerifications(jobId: string, agentToken?: string) {
         const token = this.resolveAgentToken(agentToken);
         const auth = this.mergeAuth(token, {});
@@ -955,6 +1004,71 @@ export class EarnFiAgentClient {
         const body: Record<string, unknown> = {};
         if (opts.settlementId !== undefined) body.settlement_id = opts.settlementId;
         return this.x402Post(`/agents/orders/${orderId}/fund`, body, opts.agentToken);
+    }
+
+    /**
+     * Create a marketplace order then fund it (402 → sign → settle).
+     * Same single flow as MCP `earnfi_hire_agent` / `earnfi_order_create`.
+     * On 402, response JSON includes `order_id` so you can retry `fundAgentOrder` without recreating.
+     */
+    async createAndFundOrder(
+        serviceId: number,
+        opts: {
+            input?: Record<string, unknown>;
+            settlementId?: number;
+            agentToken?: string;
+        } = {}
+    ): Promise<X402Response> {
+        if (opts.agentToken) this.agentToken = opts.agentToken;
+        const createRes = await this.agents.createOrder(serviceId, opts.input ?? {});
+        if (createRes.status < 200 || createRes.status >= 300) {
+            return createRes;
+        }
+
+        const created =
+            createRes.json && typeof createRes.json === 'object' && !Array.isArray(createRes.json)
+                ? (createRes.json as Record<string, unknown>)
+                : {};
+        const orderObj =
+            created.order && typeof created.order === 'object' && !Array.isArray(created.order)
+                ? (created.order as Record<string, unknown>)
+                : null;
+        const rawId = created.order_id ?? orderObj?.order_id ?? orderObj?.id;
+        const orderId = typeof rawId === 'number' ? rawId : Number(rawId);
+        if (!Number.isFinite(orderId) || orderId <= 0) {
+            return createRes;
+        }
+
+        const fundRes = await this.fundAgentOrder(orderId, {
+            settlementId: opts.settlementId,
+            agentToken: opts.agentToken,
+        });
+        const fundJson =
+            fundRes.json && typeof fundRes.json === 'object' && !Array.isArray(fundRes.json)
+                ? { ...(fundRes.json as Record<string, unknown>) }
+                : {};
+
+        return {
+            ...fundRes,
+            json: {
+                ...fundJson,
+                order_id: orderId,
+                public_slug: created.public_slug ?? fundJson.public_slug,
+                created_order: created,
+            },
+        };
+    }
+
+    /** Alias for {@link createAndFundOrder} — matches MCP `earnfi_hire_agent`. */
+    hireAndFund(
+        serviceId: number,
+        opts: {
+            input?: Record<string, unknown>;
+            settlementId?: number;
+            agentToken?: string;
+        } = {}
+    ) {
+        return this.createAndFundOrder(serviceId, opts);
     }
 
     /** Fund an agent escrow deal (402 → sign → retry). */
