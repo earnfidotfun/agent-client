@@ -1,7 +1,7 @@
 {
   "name": "@earn-fi/agent-client",
-  "version": "2.7.0",
-  "description": "TypeScript client and CLI for the EarnFi Agent API — registration, x402 paid creates, polling, marketplace hire, Equity Guard (tokenized equity safety), disputes, deals, reviews, and creator actions.",
+  "version": "2.7.1",
+  "description": "EarnFi Agent API SDK & CLI: Human Actions, hybrid jobs, agent marketplace (hire, orders, escrow), Work+Money deals & receipts, open work, x402 (Solana + OKX), disputes, reviews, Equity Guard.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,8 +34,12 @@
     "agent",
     "solana",
     "usdc",
+    "human-actions",
+    "agent-marketplace",
+    "work-and-money",
+    "escrow",
     "human-in-the-loop",
-    "microjobs"
+    "capabilities"
   ],
   "license": "MIT",
   "homepage": "https://github.com/earnfidotfun/agent-client#readme",
